@@ -9,10 +9,16 @@ log.debug("User options: " .. vim.inspect(config))
 
 local M = {}
 
+-- for now we will use a shared terminal buffer for all buffers. Eventually we will aim to implement
+-- a multi-terminal environment.
 local shared_terminal = {
     buf = nil,
     channel = nil,
 }
+
+M.r_is_running = function()
+    return shared_terminal.buf and vim.api.nvim_buf_is_valid(shared_terminal.buf)
+end
 
 --- Check R is installed
 --- This function checks if R is installed by running the given command and checking the return code.
@@ -172,7 +178,24 @@ local r_term_init_env = {
     LUNAR_TERM = "TRUE",
 }
 
+local function calculate_terminal_split()
+    local term_width = config.terminal_width
+    local win_height = vim.api.nvim_win_get_height(0)
+    local win_width = vim.api.nvim_win_get_width(0)
+
+    local editor_width = win_width - term_width
+
+    if editor_width < 80 then
+        local term_height = math.floor(win_height * 0.3) -- 30% of the window height
+        return { split = "below", height = term_height }
+    else
+        return { split = "right", width = term_width }
+    end
+end
+
 local function ensure_terminal()
+    local win_opts = calculate_terminal_split()
+
     if not shared_terminal.buf or not vim.api.nvim_buf_is_valid(shared_terminal.buf) then
         -- save the current window id to restore it later
         local prev_win = vim.api.nvim_get_current_win()
@@ -183,7 +206,8 @@ local function ensure_terminal()
 
         -- open a new terminal window
         -- switch is set to true so that the terminal command opens in the terminal buffer
-        local window_id = vim.api.nvim_open_win(shared_terminal.buf, true, { split = "right" })
+        log.debug("Terminal split options: " .. vim.inspect(win_opts))
+        local window_id = vim.api.nvim_open_win(shared_terminal.buf, true, win_opts)
         log.debug("Opened terminal window id: " .. window_id)
 
         local cmd = config.r_repl .. " " .. table.concat(config.r_repl_default_args, " ")
@@ -211,6 +235,13 @@ local function ensure_terminal()
     else
         log.debug(string.format("R repl is already running in terminal buffer %d, channel id %d",
             shared_terminal.buf, shared_terminal.chan))
+
+        -- check if the terminal buffer is visible in any window
+        local buf_visible = #vim.fn.win_findbuf(shared_terminal.buf) > 0
+        if not buf_visible then
+            log.debug("Terminal buffer is not visible in any window. Opening a new window.")
+            vim.api.nvim_open_win(shared_terminal.buf, true, win_opts)
+        end
     end
 
     return shared_terminal
@@ -233,5 +264,23 @@ M.stop_r = function()
         log.warn("R repl is not running in terminal")
     end
 end
+
+--- Send a command to the R terminal
+---@param code string: R code to send to the terminal
+M.send_to_r = function(code)
+    ensure_terminal()
+    log.debug("Received code to send to R terminal: " .. code)
+
+    -- strip leading and trailing whitespace
+    code = code:gsub("^%s*(.-)%s*$", "%1")
+    log.debug("Cleaned whitespace from code: " .. code)
+
+    if config.bracketed_paste then
+        code = "\x1b[200~" .. code .. "\x1b[201~"
+    end
+
+    vim.api.nvim_chan_send(shared_terminal.chan, code .. "\n")
+end
+
 
 return M

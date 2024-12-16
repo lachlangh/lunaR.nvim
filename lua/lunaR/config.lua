@@ -4,6 +4,8 @@ local opts = {
     r_repl = "R",
     r_batch = "Rscript",
     r_repl_default_args = { "--no-save", "--no-restore-data" },
+    terminal_width = 160,
+    editor_width = nil,
 }
 
 --- Merge user options with default options
