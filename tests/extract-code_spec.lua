@@ -89,6 +89,13 @@ describe("send module with real R file", function()
         test_cursor_expression { line = 55, col = 0, expected = { 54, 0, 54, 18 } }
     end)
 
+    it("should send next line inside function started on blank line", function()
+        test_cursor_expression { line = 60, col = 0, expected = { 60, 2, 60, 8 } }
+    end)
+
+    it("should fine entire piped expression when started on blank line", function()
+        test_cursor_expression { line = 68, col = 0, expected = { 65, 0, 68, 11 } }
+    end)
 
     vim.api.nvim_buf_delete(bufnr, { force = true })
 end

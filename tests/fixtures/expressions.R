@@ -53,3 +53,18 @@ if (TRUE)
 # styler: on
 
 if (true) x else y
+
+# blank line in middle of expression, should send next line
+f <- function(x, y) {
+  x <- 1
+
+  y <- 2
+}
+
+# blank line in middle of piped expression, should send entire expression
+# styler: off
+df |>
+  filter(x > 1) |>
+
+  select(y)
+# styler: on
