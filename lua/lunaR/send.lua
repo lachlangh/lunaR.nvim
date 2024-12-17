@@ -1,5 +1,5 @@
 local log = require("lunaR.logging")
-local code = require("lunaR.extract-code")
+local code = require("lunaR.R.code")
 local term = require("lunaR.terminal")
 
 local M = {}

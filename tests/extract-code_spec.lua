@@ -1,13 +1,20 @@
 local assert = require("luassert")
 local it = require("plenary.busted").it
 
-local send = require("lunaR.extract-code")
+local code = require("lunaR.R.code")
 local logging = require("lunaR.logging")
 logging.set_level("WARN")
 
 local function test_cursor_expression(opts)
     vim.api.nvim_win_set_cursor(0, { opts.line, opts.col })
-    local _, range, _ = send.get_cursor_expression()
+    local _, range, _ = code.get_cursor_expression()
+    assert.are.same(opts.expected, range)
+end
+
+local function test_next_expression(opts)
+    vim.api.nvim_win_set_cursor(0, { opts.line, opts.col })
+    local node, _, _ = code.get_cursor_expression()
+    local _, range, _ = code.get_next_expression(node, opts.bufnr)
     assert.are.same(opts.expected, range)
 end
 
@@ -93,8 +100,32 @@ describe("send module with real R file", function()
         test_cursor_expression { line = 60, col = 0, expected = { 60, 2, 60, 8 } }
     end)
 
+    it("should not find expression on final line", function()
+        test_cursor_expression { line = 70, col = 0, expected = nil }
+    end)
+
     it("should fine entire piped expression when started on blank line", function()
         test_cursor_expression { line = 68, col = 0, expected = { 65, 0, 68, 11 } }
+    end)
+
+    it("should find next expression", function()
+        test_next_expression { line = 1, col = 0, expected = { 4, 0, 6, 10 }, bufnr = bufnr }
+    end)
+
+    it("should find next statement inside function", function()
+        test_next_expression { line = 36, col = 0, expected = { 36, 2, 38, 3 }, bufnr = bufnr }
+    end)
+
+    it("should find no next statement on last statement of a function", function()
+        test_next_expression { line = 40, col = 0, expected = nil, bufnr = bufnr }
+    end)
+
+    it("should find no next statement on last statement of a file", function()
+        test_next_expression { line = 69, col = 0, expected = nil, bufnr = bufnr }
+    end)
+
+    it("should find no next statement after last statement of a file", function()
+        test_next_expression { line = 70, col = 0, expected = nil, bufnr = bufnr }
     end)
 
     vim.api.nvim_buf_delete(bufnr, { force = true })

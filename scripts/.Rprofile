@@ -1,4 +1,4 @@
-print("Hello from .Rprofile")
+print("Hello from lunaR.nvim")
 
 # we add the installation directory as the last element of .libPaths() so as not to
 # interfere with other packages they may have installed. Since our solution (`httpuv`)
