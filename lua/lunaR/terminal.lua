@@ -70,18 +70,6 @@ local function exec_r_cmd(cmd)
     return vim.system({ config.r_repl, "--slave", "-e", cat_cmd }):wait().stdout
 end
 
---- Get the R home directory
---- This function executes the R command `path.expand("~")` to get the R home directory.
---- On Windows R uses relatively complex logic to determine the home directory, so this function
---- is used to get the home directory (according to R) in a platform-independent way.
---- @return string
-local function get_r_home()
-    log.debug("Getting R home directory")
-    local r_home = exec_r_cmd('path.expand("~")')
-    log.debug("R home directory is: " .. r_home)
-    return r_home
-end
-
 --- Identify the `.Rprofile` file to be executed at startup.
 ---
 --- This function reimplements the R runtime logic for identifying the user profile file,
