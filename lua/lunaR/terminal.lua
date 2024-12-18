@@ -5,8 +5,6 @@ local log = require("lunaR.logging")
 local utils = require("lunaR.utils")
 local config = require("lunaR.config").get_user_opts()
 
-log.debug("User options: " .. vim.inspect(config))
-
 local M = {}
 
 -- for now we will use a shared terminal buffer for all buffers. Eventually we will aim to implement
@@ -16,8 +14,17 @@ local shared_terminal = {
     channel = nil,
 }
 
-M.r_is_running = function()
-    return shared_terminal.buf and vim.api.nvim_buf_is_valid(shared_terminal.buf)
+-- Initialisation state
+local initialised = false
+local r_installed = nil -- nil = not checked, true = installed, false = not installed
+local r_term_init_env = nil
+
+--- Execute an R command in a subprocess
+--- @param cmd string: R command to execute
+--- @return string: Output of the command
+local function exec_r_cmd(cmd)
+    local cat_cmd = 'cat(' .. cmd .. ')'
+    return vim.system({ config.r_repl, "--slave", "-e", cat_cmd }):wait().stdout
 end
 
 --- Check R is installed
@@ -50,24 +57,6 @@ local function check_r_installed(cmd)
     end
 
     return exit_code == 0
-end
-
--- Ensure R executables are installed
-if not check_r_installed(config.r_repl) then
-    error("FATAL: R REPL executable is not installed or not found in PATH.", 0)
-end
-
-if not check_r_installed(config.r_batch) then
-    log.warn("R Batch executable is not installed or not found in PATH.")
-end
-
-
---- Execute an R command in a subprocess
---- @param cmd string: R command to execute
---- @return string: Output of the command
-local function exec_r_cmd(cmd)
-    local cat_cmd = 'cat(' .. cmd .. ')'
-    return vim.system({ config.r_repl, "--slave", "-e", cat_cmd }):wait().stdout
 end
 
 --- Identify the `.Rprofile` file to be executed at startup.
@@ -157,15 +146,45 @@ local function find_lunaR_rprofile()
     return lunaR_rprofile
 end
 
-local user_rprofile = find_local_rprofile() or ""
-local lunaR_rprofile = find_lunaR_rprofile()
+--- Initialise the lunaR environment
+--- This function sets up the environment for the R terminal, including checking if R is installed,
+--- identifying the R profile files to execute
+--- @return nil
+local function initialise()
+    if initialised then
+        return
+    end
 
-local r_term_init_env = {
-    R_PROFILE_USER = lunaR_rprofile,
-    LUNAR_ORIG_RPROFILE = user_rprofile,
-    LUNAR_TERM = "TRUE",
-}
+    log.info("Initialising lunaR environment")
 
+    -- Check R executables are installed
+    if not check_r_installed(config.r_repl) then
+        log.error("FATAL: R REPL executable is not installed or not found in PATH.")
+        r_installed = false
+        return
+    end
+
+    r_installed = true
+
+    if not check_r_installed(config.r_batch) then
+        log.warn("R Batch executable is not installed or not found in PATH.")
+    end
+
+    local user_rprofile = find_local_rprofile() or ""
+    local lunaR_rprofile = find_lunaR_rprofile()
+
+    r_term_init_env = {
+        R_PROFILE_USER = lunaR_rprofile,
+        LUNAR_ORIG_RPROFILE = user_rprofile,
+        LUNAR_TERM = "TRUE",
+    }
+
+    initialised = true
+    log.info("Initialisation complete")
+end
+
+--- Calculate the terminal split based on the current window size
+--- Simple logic which can be extended later if needed
 local function calculate_terminal_split()
     local term_width = config.terminal_width
     local win_height = vim.api.nvim_win_get_height(0)
@@ -181,7 +200,16 @@ local function calculate_terminal_split()
     end
 end
 
+--- Ensure the R terminal is running
+--- This function ensures the R terminal is running. Called by all other functions that interact with the terminal.
 local function ensure_terminal()
+    initialise()
+
+    if not r_installed then
+        log.error("R is not installed. Cannot start R terminal.")
+        return
+    end
+
     local win_opts = calculate_terminal_split()
 
     if not shared_terminal.buf or not vim.api.nvim_buf_is_valid(shared_terminal.buf) then
@@ -235,8 +263,6 @@ local function ensure_terminal()
     return shared_terminal
 end
 
-
-
 M.start_r = function()
     ensure_terminal()
 end
@@ -270,5 +296,8 @@ M.send_to_r = function(code)
     vim.api.nvim_chan_send(shared_terminal.chan, code .. "\n")
 end
 
+M.r_is_running = function()
+    return shared_terminal.buf and vim.api.nvim_buf_is_valid(shared_terminal.buf)
+end
 
 return M
