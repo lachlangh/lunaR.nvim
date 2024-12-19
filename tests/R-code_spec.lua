@@ -2,8 +2,7 @@ local assert = require("luassert")
 local it = require("plenary.busted").it
 
 local code = require("lunaR.R.code")
-local logging = require("lunaR.logging")
-logging.set_level("WARN")
+require("lunaR.logging").set_level("warn")
 
 local function test_cursor_expression(opts)
     local node = code.find_expression(opts.bufnr, opts.line - 1)
